@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { CONFIG } from '../config';
 
 interface RateLimit {
@@ -17,6 +17,7 @@ interface Stats {
 }
 
 interface Notification {
+    id: string;
     type: 'success' | 'error';
     message: string;
 }
@@ -27,6 +28,8 @@ interface StatCard {
     subtitle?: string;
     isText?: boolean;
 }
+
+const NOTIFICATION_TIMEOUT = 5000;
 
 export default function Dashboard(): JSX.Element {
     const [stats, setStats] = useState<Stats>({
@@ -40,44 +43,51 @@ export default function Dashboard(): JSX.Element {
     });
     const [loading, setLoading] = useState<boolean>(true);
     const [autoStart, setAutoStart] = useState<boolean>(CONFIG.AUTO_START);
-    const [notification, setNotification] = useState<Notification | null>(null);
+    const [notifications, setNotifications] = useState<Notification[]>([]);
+
+    const addNotification = useCallback((type: 'success' | 'error', message: string) => {
+        const id = Date.now().toString();
+        setNotifications((prev: Notification[]) => [...prev, { id, type, message }]);
+        setTimeout(() => {
+            setNotifications((prev: Notification[]) => prev.filter((n: Notification) => n.id !== id));
+        }, NOTIFICATION_TIMEOUT);
+    }, []);
+
+    const pollStats = useCallback(async (): Promise<void> => {
+        try {
+            const [statsRes, rateRes] = await Promise.all([
+                fetch('/api/follow'),
+                fetch('/api/rate-limit')
+            ]);
+
+            if (!statsRes.ok || !rateRes.ok) {
+                throw new Error('API request failed');
+            }
+
+            const [statsData, rateData] = await Promise.all([
+                statsRes.json(),
+                rateRes.json()
+            ]);
+            
+            setStats((prev: Stats) => ({
+                ...prev,
+                ...statsData,
+                rateLimit: rateData,
+                lastUpdate: new Date().toISOString()
+            }));
+
+            if (rateData.remaining < 100) {
+                addNotification('error', `Rate limit running low: ${rateData.remaining} remaining`);
+            }
+        } catch (error) {
+            addNotification('error', 'Failed to fetch stats');
+            console.error('Failed to fetch stats:', error);
+        } finally {
+            setLoading(false);
+        }
+    }, [addNotification]);
 
     useEffect(() => {
-        const pollStats = async (): Promise<void> => {
-            try {
-                const [statsRes, rateRes] = await Promise.all([
-                    fetch('/api/follow'),
-                    fetch('/api/rate-limit')
-                ]);
-                const [statsData, rateData] = await Promise.all([
-                    statsRes.json(),
-                    rateRes.json()
-                ]);
-                
-                setStats((prev: Stats) => ({
-                    ...prev,
-                    ...statsData,
-                    rateLimit: rateData,
-                    lastUpdate: new Date().toISOString()
-                }));
-
-                if (rateData.remaining < 100) {
-                    setNotification({
-                        type: 'error',
-                        message: `Rate limit running low: ${rateData.remaining} remaining`
-                    });
-                }
-            } catch (error) {
-                setNotification({
-                    type: 'error',
-                    message: 'Failed to fetch stats'
-                });
-                console.error('Failed to fetch stats:', error);
-            } finally {
-                setLoading(false);
-            }
-        };
-
         if (autoStart) {
             pollStats();
         }
@@ -89,13 +99,18 @@ export default function Dashboard(): JSX.Element {
         }, CONFIG.MONITORING.UPDATE_INTERVAL);
 
         return () => clearInterval(interval);
-    }, [autoStart]);
+    }, [autoStart, pollStats]);
 
-    const toggleAutoStart = (): void => {
-        setAutoStart(!autoStart);
-    };
+    const toggleAutoStart = useCallback((): void => {
+        setAutoStart((prev: boolean) => !prev);
+    }, []);
 
-    const statCards: StatCard[] = [
+    const calculateResetTime = useCallback((resetTime: number): string => {
+        const minutesRemaining = Math.max(0, Math.round((resetTime - Date.now()/1000)/60));
+        return `Resets in ${minutesRemaining} minute${minutesRemaining === 1 ? '' : 's'}`;
+    }, []);
+
+    const statCards: StatCard[] = useMemo(() => [
         {
             title: 'Recently Followed',
             value: stats.followed.length
@@ -103,7 +118,7 @@ export default function Dashboard(): JSX.Element {
         {
             title: 'API Rate Limit',
             value: stats.rateLimit.remaining,
-            subtitle: `Resets in ${Math.round((stats.rateLimit.reset - Date.now()/1000)/60)} minutes`
+            subtitle: calculateResetTime(stats.rateLimit.reset)
         },
         {
             title: 'Processed Users',
@@ -122,17 +137,23 @@ export default function Dashboard(): JSX.Element {
             value: stats.lastUpdate ? new Date(stats.lastUpdate).toLocaleString() : 'Never',
             isText: true
         }
-    ];
+    ], [stats, calculateResetTime]);
 
     return (
-        <div className="min-h-screen bg-gray-100">
-            {notification && (
-                <div className={`fixed top-4 right-4 p-4 rounded-md shadow-lg ${
-                    notification.type === 'error' ? 'bg-red-500' : 'bg-green-500'
-                } text-white`}>
-                    {notification.message}
-                </div>
-            )}
+        <div className="min-h-screen bg-gray-100" role="main">
+            <div aria-live="polite" className="fixed top-4 right-4 space-y-2">
+                {notifications.map((notification: Notification) => (
+                    <div
+                        key={notification.id}
+                        className={`p-4 rounded-md shadow-lg ${
+                            notification.type === 'error' ? 'bg-red-500' : 'bg-green-500'
+                        } text-white`}
+                        role="alert"
+                    >
+                        {notification.message}
+                    </div>
+                ))}
+            </div>
             
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
                 <div className="flex justify-between items-center mb-8">
@@ -146,13 +167,14 @@ export default function Dashboard(): JSX.Element {
                                 ? 'bg-red-500 hover:bg-red-600' 
                                 : 'bg-green-500 hover:bg-green-600'
                         } text-white font-medium`}
+                        aria-label={autoStart ? 'Stop auto refresh' : 'Start auto refresh'}
                     >
                         {autoStart ? 'Stop Auto-Start' : 'Start Auto-Start'}
                     </button>
                 </div>
                 
                 {loading ? (
-                    <div className="animate-pulse flex space-x-4">
+                    <div className="animate-pulse flex space-x-4" role="progressbar">
                         <div className="flex-1 space-y-4 py-1">
                             <div className="h-4 bg-gray-300 rounded w-3/4"></div>
                             <div className="space-y-2">
@@ -163,7 +185,7 @@ export default function Dashboard(): JSX.Element {
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-                        {statCards.map((stat, index) => (
+                        {statCards.map((stat: StatCard, index: number) => (
                             <div key={index} className="bg-white overflow-hidden shadow rounded-lg">
                                 <div className="px-4 py-5 sm:p-6">
                                     <h3 className="text-sm font-medium text-gray-500">
@@ -185,8 +207,9 @@ export default function Dashboard(): JSX.Element {
             </div>
 
             {autoStart && (
-                <div className="fixed bottom-4 right-4">
+                <div className="fixed bottom-4 right-4" role="status">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+                    <span className="sr-only">Refreshing data...</span>
                 </div>
             )}
         </div>
