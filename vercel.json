@@ -24,5 +24,11 @@
   "env": {
     "GITHUB_TOKEN": "@github_token",
     "TARGET_USER": "@target_user"
-  }
+  },
+  "crons": [
+    {
+      "path": "/api/cron",
+      "schedule": "0 10 * * *"
+    }
+  ]
 }

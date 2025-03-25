@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { CONFIG } from '../config';
+import type { NextPage } from 'next';
 
 interface RateLimit {
     remaining: number;
@@ -28,7 +29,7 @@ interface StatCard {
     isText?: boolean;
 }
 
-export default function Dashboard(): JSX.Element {
+const Dashboard: NextPage = () => {
     const [stats, setStats] = useState<Stats>({
         followed: [],
         processed: [],
@@ -125,7 +126,7 @@ export default function Dashboard(): JSX.Element {
     ];
 
     return (
-        <div className="min-h-screen bg-gray-100">
+        <div className="min-h-screen bg-gray-100" data-testid="dashboard">
             {notification && (
                 <div className={`fixed top-4 right-4 p-4 rounded-md shadow-lg ${
                     notification.type === 'error' ? 'bg-red-500' : 'bg-green-500'
@@ -137,7 +138,7 @@ export default function Dashboard(): JSX.Element {
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
                 <div className="flex justify-between items-center mb-8">
                     <h1 className="text-3xl font-bold text-gray-900">
-                        GitHub Follower Dashboard
+                        RecentCoders Dashboard
                     </h1>
                     <button
                         onClick={toggleAutoStart}
@@ -162,24 +163,27 @@ export default function Dashboard(): JSX.Element {
                         </div>
                     </div>
                 ) : (
-                    <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-                        {statCards.map((stat, index) => (
-                            <div key={index} className="bg-white overflow-hidden shadow rounded-lg">
-                                <div className="px-4 py-5 sm:p-6">
-                                    <h3 className="text-sm font-medium text-gray-500">
-                                        {stat.title}
-                                    </h3>
-                                    <p className={`mt-1 ${stat.isText ? 'text-sm' : 'text-3xl font-semibold'} text-gray-900`}>
-                                        {stat.value}
-                                    </p>
-                                    {stat.subtitle && (
-                                        <p className="text-sm text-gray-500">
-                                            {stat.subtitle}
-                                        </p>
-                                    )}
-                                </div>
-                            </div>
-                        ))}
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <dl className="bg-white/10 backdrop-blur-sm rounded-lg p-4">
+                            <dt className="text-sm text-gray-400">Total Processed</dt>
+                            <dd className="text-2xl font-bold">{stats.total_processed}</dd>
+                        </dl>
+                        <dl className="bg-white/10 backdrop-blur-sm rounded-lg p-4">
+                            <dt className="text-sm text-gray-400">Rate Limit Hits</dt>
+                            <dd className="text-2xl font-bold">{stats.rate_limit_hits}</dd>
+                        </dl>
+                        <dl className="bg-white/10 backdrop-blur-sm rounded-lg p-4">
+                            <dt className="text-sm text-gray-400">Errors</dt>
+                            <dd className="text-2xl font-bold">{stats.errors}</dd>
+                        </dl>
+                        <dl className="bg-white/10 backdrop-blur-sm rounded-lg p-4">
+                            <dt className="text-sm text-gray-400">Consecutive Actions</dt>
+                            <dd className="text-2xl font-bold">{stats.consecutive_actions}</dd>
+                        </dl>
+                        <dl className="bg-white/10 backdrop-blur-sm rounded-lg p-4">
+                            <dt className="text-sm text-gray-400">Last Update</dt>
+                            <dd className="text-2xl font-bold">{new Date(stats.timestamp).toLocaleString()}</dd>
+                        </dl>
                     </div>
                 )}
             </div>
@@ -191,4 +195,6 @@ export default function Dashboard(): JSX.Element {
             )}
         </div>
     );
-}
+};
+
+export default Dashboard;
