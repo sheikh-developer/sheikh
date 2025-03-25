@@ -122,74 +122,50 @@ export default function Dashboard() {
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-                        <div className="bg-white overflow-hidden shadow rounded-lg">
-                            <div className="px-4 py-5 sm:p-6">
-                                <dt className="text-sm font-medium text-gray-500">
-                                    Recently Followed
-                                </dt>
-                                <dd className="mt-1 text-3xl font-semibold text-gray-900">
-                                    {stats.followed.length}
-                                </dd>
+                        {[
+                            {
+                                title: 'Recently Followed',
+                                value: stats.followed.length
+                            },
+                            {
+                                title: 'API Rate Limit',
+                                value: stats.rateLimit.remaining,
+                                subtitle: `Resets in ${Math.round((stats.rateLimit.reset - Date.now()/1000)/60)} minutes`
+                            },
+                            {
+                                title: 'Processed Users',
+                                value: stats.total_processed
+                            },
+                            {
+                                title: 'Rate Limit Hits',
+                                value: stats.rate_limit_hits
+                            },
+                            {
+                                title: 'Errors',
+                                value: stats.errors
+                            },
+                            {
+                                title: 'Last Update',
+                                value: stats.lastUpdate ? new Date(stats.lastUpdate).toLocaleString() : 'Never',
+                                isText: true
+                            }
+                        ].map((stat, index) => (
+                            <div key={index} className="bg-white overflow-hidden shadow rounded-lg">
+                                <div className="px-4 py-5 sm:p-6">
+                                    <h3 className="text-sm font-medium text-gray-500">
+                                        {stat.title}
+                                    </h3>
+                                    <p className={`mt-1 ${stat.isText ? 'text-sm' : 'text-3xl font-semibold'} text-gray-900`}>
+                                        {stat.value}
+                                    </p>
+                                    {stat.subtitle && (
+                                        <p className="text-sm text-gray-500">
+                                            {stat.subtitle}
+                                        </p>
+                                    )}
+                                </div>
                             </div>
-                        </div>
-
-                        <div className="bg-white overflow-hidden shadow rounded-lg">
-                            <div className="px-4 py-5 sm:p-6">
-                                <dt className="text-sm font-medium text-gray-500">
-                                    API Rate Limit
-                                </dt>
-                                <dd className="mt-1 text-3xl font-semibold text-gray-900">
-                                    {stats.rateLimit.remaining}
-                                </dd>
-                                <p className="text-sm text-gray-500">
-                                    Resets in {Math.round((stats.rateLimit.reset - Date.now()/1000)/60)} minutes
-                                </p>
-                            </div>
-                        </div>
-
-                        <div className="bg-white overflow-hidden shadow rounded-lg">
-                            <div className="px-4 py-5 sm:p-6">
-                                <dt className="text-sm font-medium text-gray-500">
-                                    Processed Users
-                                </dt>
-                                <dd className="mt-1 text-3xl font-semibold text-gray-900">
-                                    {stats.total_processed}
-                                </dd>
-                            </div>
-                        </div>
-
-                        <div className="bg-white overflow-hidden shadow rounded-lg">
-                            <div className="px-4 py-5 sm:p-6">
-                                <dt className="text-sm font-medium text-gray-500">
-                                    Rate Limit Hits
-                                </dt>
-                                <dd className="mt-1 text-3xl font-semibold text-gray-900">
-                                    {stats.rate_limit_hits}
-                                </dd>
-                            </div>
-                        </div>
-
-                        <div className="bg-white overflow-hidden shadow rounded-lg">
-                            <div className="px-4 py-5 sm:p-6">
-                                <dt className="text-sm font-medium text-gray-500">
-                                    Errors
-                                </dt>
-                                <dd className="mt-1 text-3xl font-semibold text-gray-900">
-                                    {stats.errors}
-                                </dd>
-                            </div>
-                        </div>
-
-                        <div className="bg-white overflow-hidden shadow rounded-lg">
-                            <div className="px-4 py-5 sm:p-6">
-                                <dt className="text-sm font-medium text-gray-500">
-                                    Last Update
-                                </dt>
-                                <dd className="mt-1 text-sm text-gray-900">
-                                    {stats.lastUpdate ? new Date(stats.lastUpdate).toLocaleString() : 'Never'}
-                                </dd>
-                            </div>
-                        </div>
+                        ))}
                     </div>
                 )}
             </div>

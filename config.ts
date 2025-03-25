@@ -3,8 +3,8 @@ import 'dotenv/config';
 declare global {
     namespace NodeJS {
         interface ProcessEnv {
-            GITHUB_TOKEN: string;
-            TARGET_USER: string;
+            GITHUB_TOKEN?: string;
+            TARGET_USER?: string;
         }
     }
 }
