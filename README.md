@@ -3,6 +3,7 @@
 A modern, serverless GitHub follower automation system with intelligent rate limiting and activity checking.
 
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fsheikh-developer%2Fsheikh)
+[![RecentCoders](https://img.shields.io/badge/Powered%20by-RecentCoders-blue)](https://recentcoders.xyz)
 
 ## Features
 
@@ -12,6 +13,7 @@ A modern, serverless GitHub follower automation system with intelligent rate lim
 - 📊 **Real-time Dashboard**: Monitor your automation in real-time
 - 🔒 **Secure**: Environment-based configuration
 - 🛡️ **Anti-Detection**: Built-in measures to prevent account detection
+- ⏰ **Automated Cron Jobs**: Scheduled automation at 10 AM UTC daily
 
 ## Live Demo
 
@@ -120,6 +122,18 @@ Response:
 }
 ```
 
+### GET /api/cron
+Automated cron job endpoint that runs daily at 10 AM UTC.
+
+Response:
+```json
+{
+  "ok": boolean,
+  "message": string,
+  "timestamp": string
+}
+```
+
 ## Contributing
 
 1. Fork the repository
@@ -132,7 +146,21 @@ Response:
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
+## Support
+
+Need help? Our verified support team is here to assist you!
+
+- Telegram: [@RecentCoders](https://t.me/RecentCoders)
+- Support Team: [@RecentCoder](https://t.me/RecentCoder) & [@PyCommander](https://t.me/PyCommander)
+- Website: [recentcoders.xyz](https://recentcoders.xyz)
+
 ## Author
 
 - GitHub: [@sheikh-developer](https://github.com/sheikh-developer)
 - Website: [sheikh-follow.vercel.app](https://sheikh-follow.vercel.app)
+
+---
+
+<div align="center">
+  <p>Powered by <a href="https://recentcoders.xyz">RecentCoders</a> - A hub for developers, innovators, and tech enthusiasts shaping the future of coding.</p>
+</div>
