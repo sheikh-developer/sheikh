@@ -1,9 +1,12 @@
-import { CONFIG, API_HEADERS } from '../github-follower/config';
+import { CONFIG, API_HEADERS } from '../config';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
 interface GitHubUser {
     login: string;
     followers: number;
+    public_repos: number;
+    created_at: string;
+    updated_at: string;
 }
 
 interface GitHubRepo {
@@ -16,12 +19,25 @@ interface GitHubRepo {
 interface GitHubEvent {
     created_at: string;
     type: string;
+    repo: {
+        name: string;
+    };
 }
 
 interface ActivityItem {
     created_at: string;
     pushed_at?: string;
     updated_at?: string;
+}
+
+interface FollowResponse {
+    followed: string[];
+    processed: string[];
+    total_processed: number;
+    rate_limit_hits: number;
+    errors: number;
+    consecutive_actions: number;
+    timestamp: string;
 }
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -84,6 +100,10 @@ const getAllFollowers = async (): Promise<GitHubUser[]> => {
                 continue;
             }
             
+            if (!res.ok) {
+                throw new Error(`GitHub API responded with status ${res.status}`);
+            }
+            
             const followers = await res.json() as GitHubUser[];
             if (!followers.length) break;
             
@@ -92,6 +112,7 @@ const getAllFollowers = async (): Promise<GitHubUser[]> => {
             await sleep(CONFIG.PAGINATION.DELAY);
             page++;
         } catch (error) {
+            console.error(`Error fetching followers page ${page}:`, error);
             consecutiveErrors++;
             if (consecutiveErrors >= CONFIG.ERROR_HANDLING.MAX_CONSECUTIVE_ERRORS) {
                 await sleep(CONFIG.ERROR_HANDLING.PAUSE_DURATION);
@@ -112,12 +133,17 @@ const isActiveUser = async (username: string): Promise<boolean> => {
             fetch(`https://api.github.com/users/${username}/repos?sort=updated`, { headers: API_HEADERS })
         ]);
 
+        if (!user.ok || !events.ok || !repos.ok) {
+            throw new Error('One or more API requests failed');
+        }
+
         const userData = await user.json() as GitHubUser;
         const eventsData = await events.json() as GitHubEvent[];
         const reposData = await repos.json() as GitHubRepo[];
 
         // Check basic user criteria
-        if (userData.followers < CONFIG.ACTIVITY_CHECK.MIN_FOLLOWERS) {
+        if (userData.followers < CONFIG.ACTIVITY_CHECK.MIN_FOLLOWERS ||
+            userData.public_repos < CONFIG.ACTIVITY_CHECK.MIN_REPOS) {
             return false;
         }
 
@@ -159,14 +185,15 @@ const isActiveUser = async (username: string): Promise<boolean> => {
 
         const daysSinceActive = (Date.now() - latestActivity.getTime()) / (1000 * 60 * 60 * 24);
         return daysSinceActive < CONFIG.ACTIVITY_CHECK.MAX_DAYS_INACTIVE;
-    } catch {
+    } catch (error) {
+        console.error(`Error checking activity for user ${username}:`, error);
         return false;
     }
 };
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-    if (!CONFIG.GITHUB_TOKEN) {
-        return res.status(500).json({ error: 'GitHub token not configured' });
+    if (req.method !== 'GET') {
+        return res.status(405).json({ error: 'Method not allowed' });
     }
 
     try {
@@ -202,6 +229,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                         rateLimitHits++;
                         const retryAfter = parseInt(followRes.headers.get('retry-after') || '60');
                         await sleep(retryAfter * 1000);
+                    } else if (!followRes.ok) {
+                        throw new Error(`Follow request failed with status ${followRes.status}`);
                     }
 
                     await sleep(getRandomDelay());
@@ -209,6 +238,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 
                 await sleep(CONFIG.ACTIVITY_CHECK.CHECK_INTERVAL);
             } catch (error) {
+                console.error(`Error processing user ${follower.login}:`, error);
                 errorCount++;
                 if (errorCount >= CONFIG.ERROR_HANDLING.ERROR_THRESHOLD) {
                     await sleep(CONFIG.ERROR_HANDLING.PAUSE_DURATION);
@@ -217,7 +247,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             }
         }
 
-        return res.status(200).json({ 
+        const response: FollowResponse = {
             followed: activeUsers,
             processed: processedUsers,
             total_processed: followers.length,
@@ -225,8 +255,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             errors: errorCount,
             consecutive_actions: consecutiveActions,
             timestamp: new Date().toISOString()
-        });
+        };
+
+        return res.status(200).json(response);
     } catch (error) {
-        return res.status(500).json({ error: error.message });
+        console.error('Follow handler error:', error);
+        return res.status(500).json({ 
+            error: 'Internal server error',
+            details: error instanceof Error ? error.message : 'Unknown error'
+        });
     }
 }

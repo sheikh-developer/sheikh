@@ -3,8 +3,8 @@ import 'dotenv/config';
 declare global {
     namespace NodeJS {
         interface ProcessEnv {
-            GITHUB_TOKEN?: string;
-            TARGET_USER?: string;
+            GITHUB_TOKEN: string;
+            TARGET_USER: string;
         }
     }
 }
@@ -13,9 +13,13 @@ if (!process.env.GITHUB_TOKEN) {
     throw new Error('GitHub token is required. Please set GITHUB_TOKEN in .env.local');
 }
 
+if (!process.env.TARGET_USER) {
+    throw new Error('Target user is required. Please set TARGET_USER in .env.local');
+}
+
 export const CONFIG = {
     GITHUB_TOKEN: process.env.GITHUB_TOKEN,
-    TARGET_USER: process.env.TARGET_USER || 'likhonsheikhofficial',
+    TARGET_USER: process.env.TARGET_USER,
     
     // Rate Limiting
     RATE_LIMITS: {
@@ -76,11 +80,11 @@ export const CONFIG = {
 
     // Auto-start configuration
     AUTO_START: true
-};
+} as const;
 
-export const API_HEADERS: Record<string, string> = {
+export const API_HEADERS = {
     Authorization: `token ${CONFIG.GITHUB_TOKEN}`,
     Accept: 'application/vnd.github.v3+json',
     'User-Agent': CONFIG.ANTI_DETECTION.USER_AGENT,
     'X-GitHub-Api-Version': '2022-11-28'
-};
+} as const;
