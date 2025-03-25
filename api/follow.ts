@@ -51,6 +51,7 @@ class RateLimiter {
     private followsInLastMinute: number = 0;
     private lastFollowTime: number = 0;
     private lastResetTime: number = Date.now();
+    private errorCounts: Map<string, number> = new Map();
 
     async waitForRateLimit() {
         const now = Date.now();
@@ -77,6 +78,23 @@ class RateLimiter {
 
         this.followsInLastMinute++;
         this.lastFollowTime = Date.now();
+    }
+
+    async handleError(type: string, error: Error) {
+        const count = (this.errorCounts.get(type) || 0) + 1;
+        this.errorCounts.set(type, count);
+        
+        if (count >= CONFIG.ERROR_HANDLING.MAX_CONSECUTIVE_ERRORS) {
+            await sleep(Math.min(
+                CONFIG.ERROR_HANDLING.PAUSE_DURATION * count,
+                CONFIG.ERROR_HANDLING.PAUSE_DURATION * 5
+            ));
+            this.errorCounts.set(type, 0);
+        }
+    }
+    
+    resetErrors(type: string) {
+        this.errorCounts.set(type, 0);
     }
 }
 
@@ -197,6 +215,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     try {
+        const startTime = Date.now();
         const followers = await getAllFollowers();
         const activeUsers: string[] = [];
         const processedUsers: string[] = [];
@@ -257,8 +276,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             timestamp: new Date().toISOString()
         };
 
-        return res.status(200).json(response);
+        // Add detailed monitoring
+        const monitoringData = {
+            processing_time: Date.now() - startTime,
+            success_rate: (activeUsers.length / processedUsers.length) * 100,
+            rate_limit_efficiency: 1 - (rateLimitHits / processedUsers.length)
+        };
+
+        return res.status(200).json({
+            ...response,
+            monitoring: monitoringData
+        });
     } catch (error) {
+        await rateLimiter.handleError('follow', error as Error);
         console.error('Follow handler error:', error);
         return res.status(500).json({ 
             error: 'Internal server error',

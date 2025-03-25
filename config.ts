@@ -75,7 +75,13 @@ export const CONFIG = {
         UPDATE_INTERVAL: 5000,
         MAX_ERRORS_BEFORE_PAUSE: 5,
         PAUSE_DURATION: 15 * 60 * 1000,
-        LOG_LEVEL: 'info'
+        LOG_LEVEL: 'info',
+        THRESHOLDS: {
+            RATE_LIMIT_WARNING: 100,
+            SUCCESS_RATE_MIN: 70,
+            MAX_PROCESSING_TIME: 300000, // 5 minutes
+            ERROR_RATE_MAX: 0.1 // 10%
+        }
     },
 
     // Auto-start configuration

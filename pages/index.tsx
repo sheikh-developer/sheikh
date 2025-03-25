@@ -26,6 +26,7 @@ export default function Dashboard() {
     });
     const [loading, setLoading] = useState(true);
     const [autoStart, setAutoStart] = useState(CONFIG.AUTO_START);
+    const [notification, setNotification] = useState<{type: 'success'|'error', message: string}|null>(null);
 
     useEffect(() => {
         const pollStats = async () => {
@@ -45,7 +46,19 @@ export default function Dashboard() {
                     rateLimit: rateData,
                     lastUpdate: new Date().toISOString()
                 }));
+
+                // Add notification for rate limit warnings
+                if (rateData.remaining < 100) {
+                    setNotification({
+                        type: 'error',
+                        message: `Rate limit running low: ${rateData.remaining} remaining`
+                    });
+                }
             } catch (error) {
+                setNotification({
+                    type: 'error',
+                    message: 'Failed to fetch stats'
+                });
                 console.error('Failed to fetch stats:', error);
             } finally {
                 setLoading(false);
@@ -71,6 +84,15 @@ export default function Dashboard() {
 
     return (
         <div className="min-h-screen bg-gray-100">
+            {/* Notification Banner */}
+            {notification && (
+                <div className={`fixed top-4 right-4 p-4 rounded-md shadow-lg ${
+                    notification.type === 'error' ? 'bg-red-500' : 'bg-green-500'
+                } text-white`}>
+                    {notification.message}
+                </div>
+            )}
+            
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
                 <div className="flex justify-between items-center mb-8">
                     <h1 className="text-3xl font-bold text-gray-900">
@@ -171,6 +193,13 @@ export default function Dashboard() {
                     </div>
                 )}
             </div>
+
+            {/* Add processing indicator */}
+            {autoStart && (
+                <div className="fixed bottom-4 right-4">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+                </div>
+            )}
         </div>
     );
 }
