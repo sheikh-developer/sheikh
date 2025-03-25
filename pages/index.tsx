@@ -1,20 +1,34 @@
 import { useState, useEffect } from 'react';
 import { CONFIG } from '../config';
 
-interface Stats {
-  followed: string[];
-  processed: string[];
-  rateLimit: {
+interface RateLimit {
     remaining: number;
     reset: number;
-  };
-  rate_limit_hits: number;
-  errors: number;
-  total_processed: number;
-  lastUpdate: string | null;
 }
 
-export default function Dashboard() {
+interface Stats {
+    followed: string[];
+    processed: string[];
+    rateLimit: RateLimit;
+    rate_limit_hits: number;
+    errors: number;
+    total_processed: number;
+    lastUpdate: string | null;
+}
+
+interface Notification {
+    type: 'success' | 'error';
+    message: string;
+}
+
+interface StatCard {
+    title: string;
+    value: string | number;
+    subtitle?: string;
+    isText?: boolean;
+}
+
+export default function Dashboard(): JSX.Element {
     const [stats, setStats] = useState<Stats>({
         followed: [],
         processed: [],
@@ -24,12 +38,12 @@ export default function Dashboard() {
         total_processed: 0,
         lastUpdate: null
     });
-    const [loading, setLoading] = useState(true);
-    const [autoStart, setAutoStart] = useState(CONFIG.AUTO_START);
-    const [notification, setNotification] = useState<{type: 'success'|'error', message: string}|null>(null);
+    const [loading, setLoading] = useState<boolean>(true);
+    const [autoStart, setAutoStart] = useState<boolean>(CONFIG.AUTO_START);
+    const [notification, setNotification] = useState<Notification | null>(null);
 
     useEffect(() => {
-        const pollStats = async () => {
+        const pollStats = async (): Promise<void> => {
             try {
                 const [statsRes, rateRes] = await Promise.all([
                     fetch('/api/follow'),
@@ -40,14 +54,13 @@ export default function Dashboard() {
                     rateRes.json()
                 ]);
                 
-                setStats(prev => ({
+                setStats((prev: Stats) => ({
                     ...prev,
                     ...statsData,
                     rateLimit: rateData,
                     lastUpdate: new Date().toISOString()
                 }));
 
-                // Add notification for rate limit warnings
                 if (rateData.remaining < 100) {
                     setNotification({
                         type: 'error',
@@ -78,13 +91,41 @@ export default function Dashboard() {
         return () => clearInterval(interval);
     }, [autoStart]);
 
-    const toggleAutoStart = () => {
+    const toggleAutoStart = (): void => {
         setAutoStart(!autoStart);
     };
 
+    const statCards: StatCard[] = [
+        {
+            title: 'Recently Followed',
+            value: stats.followed.length
+        },
+        {
+            title: 'API Rate Limit',
+            value: stats.rateLimit.remaining,
+            subtitle: `Resets in ${Math.round((stats.rateLimit.reset - Date.now()/1000)/60)} minutes`
+        },
+        {
+            title: 'Processed Users',
+            value: stats.total_processed
+        },
+        {
+            title: 'Rate Limit Hits',
+            value: stats.rate_limit_hits
+        },
+        {
+            title: 'Errors',
+            value: stats.errors
+        },
+        {
+            title: 'Last Update',
+            value: stats.lastUpdate ? new Date(stats.lastUpdate).toLocaleString() : 'Never',
+            isText: true
+        }
+    ];
+
     return (
         <div className="min-h-screen bg-gray-100">
-            {/* Notification Banner */}
             {notification && (
                 <div className={`fixed top-4 right-4 p-4 rounded-md shadow-lg ${
                     notification.type === 'error' ? 'bg-red-500' : 'bg-green-500'
@@ -122,34 +163,7 @@ export default function Dashboard() {
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-                        {[
-                            {
-                                title: 'Recently Followed',
-                                value: stats.followed.length
-                            },
-                            {
-                                title: 'API Rate Limit',
-                                value: stats.rateLimit.remaining,
-                                subtitle: `Resets in ${Math.round((stats.rateLimit.reset - Date.now()/1000)/60)} minutes`
-                            },
-                            {
-                                title: 'Processed Users',
-                                value: stats.total_processed
-                            },
-                            {
-                                title: 'Rate Limit Hits',
-                                value: stats.rate_limit_hits
-                            },
-                            {
-                                title: 'Errors',
-                                value: stats.errors
-                            },
-                            {
-                                title: 'Last Update',
-                                value: stats.lastUpdate ? new Date(stats.lastUpdate).toLocaleString() : 'Never',
-                                isText: true
-                            }
-                        ].map((stat, index) => (
+                        {statCards.map((stat, index) => (
                             <div key={index} className="bg-white overflow-hidden shadow rounded-lg">
                                 <div className="px-4 py-5 sm:p-6">
                                     <h3 className="text-sm font-medium text-gray-500">
@@ -170,7 +184,6 @@ export default function Dashboard() {
                 )}
             </div>
 
-            {/* Add processing indicator */}
             {autoStart && (
                 <div className="fixed bottom-4 right-4">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
