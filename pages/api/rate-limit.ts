@@ -1,6 +1,33 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { CONFIG, API_HEADERS } from '../../config';
 
+// GitHub API response structure
+interface GitHubRateLimitResponse {
+    rate: {
+        limit: number;
+        remaining: number;
+        reset: number;
+    };
+    resources: {
+        core: {
+            limit: number;
+            remaining: number;
+            reset: number;
+        };
+        search: {
+            limit: number;
+            remaining: number;
+            reset: number;
+        };
+        graphql: {
+            limit: number;
+            remaining: number;
+            reset: number;
+        };
+    };
+}
+
+// Our API response structure
 interface RateLimitResponse {
     remaining: number;
     reset: number;
@@ -55,7 +82,7 @@ export default async function handler(
             throw new Error(`GitHub API responded with status ${response.status}: ${response.statusText}`);
         }
         
-        const data = await response.json() as RateLimitResponse;
+        const data = await response.json() as GitHubRateLimitResponse;
         
         return res.status(200).json({
             remaining: data.rate.remaining,
