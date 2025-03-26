@@ -36,6 +36,13 @@ interface MonitoringData {
     rate_limit_efficiency: number;
 }
 
+interface PaginationInfo {
+    current_page: number;
+    total_pages: number;
+    total_followers: number;
+    limit: number;
+}
+
 interface FollowResponse {
     followed: string[];
     processed: string[];
@@ -45,6 +52,7 @@ interface FollowResponse {
     consecutive_actions: number;
     timestamp: string;
     monitoring: MonitoringData;
+    pagination?: PaginationInfo;
 }
 
 interface ErrorResponse {
@@ -243,15 +251,29 @@ export default async function handler(
             throw new Error('GitHub token or target user not configured');
         }
 
+        // Get pagination parameters from query string
+        const page = parseInt(req.query.page as string) || 1;
+        const limit = parseInt(req.query.limit as string) || 5; // Process 5 users per request by default
+
         const startTime = Date.now();
-        const followers = await getAllFollowers();
+        
+        // Get a subset of followers based on pagination
+        const allFollowers = await getAllFollowers();
+        const startIndex = (page - 1) * limit;
+        const endIndex = startIndex + limit;
+        const paginatedFollowers = allFollowers.slice(startIndex, endIndex);
+        
         const activeUsers: string[] = [];
         const processedUsers: string[] = [];
         let errorCount = 0;
         let rateLimitHits = 0;
         let consecutiveActions = 0;
 
-        for (const follower of followers) {
+        // Get total count for pagination info
+        const totalFollowers = allFollowers.length;
+
+        // Process only the paginated subset of followers
+        for (const follower of paginatedFollowers) {
             try {
                 processedUsers.push(follower.login);
                 
@@ -297,7 +319,7 @@ export default async function handler(
         const response: FollowResponse = {
             followed: activeUsers,
             processed: processedUsers,
-            total_processed: followers.length,
+            total_processed: processedUsers.length,
             rate_limit_hits: rateLimitHits,
             errors: errorCount,
             consecutive_actions: consecutiveActions,
@@ -306,6 +328,12 @@ export default async function handler(
                 processing_time: Date.now() - startTime,
                 success_rate: processedUsers.length > 0 ? (activeUsers.length / processedUsers.length) * 100 : 0,
                 rate_limit_efficiency: processedUsers.length > 0 ? 1 - (rateLimitHits / processedUsers.length) : 1
+            },
+            pagination: {
+                current_page: page,
+                total_pages: Math.ceil(totalFollowers / limit),
+                total_followers: totalFollowers,
+                limit: limit
             }
         };
 

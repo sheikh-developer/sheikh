@@ -73,27 +73,42 @@ export default async function handler(
         if (!CONFIG.GITHUB_TOKEN) {
             throw new Error('GitHub token is not configured');
         }
-
-        const response = await fetch('https://api.github.com/rate_limit', {
-            headers: API_HEADERS
-        });
         
-        if (!response.ok) {
-            throw new Error(`GitHub API responded with status ${response.status}: ${response.statusText}`);
-        }
+        console.log('Fetching rate limit from GitHub API...');
         
-        const data = await response.json() as GitHubRateLimitResponse;
-        
-        return res.status(200).json({
-            remaining: data.rate.remaining,
-            reset: data.rate.reset,
-            limit: data.rate.limit,
-            resources: {
-                core: data.resources.core,
-                search: data.resources.search,
-                graphql: data.resources.graphql
+        try {
+            const response = await fetch('https://api.github.com/rate_limit', {
+                headers: API_HEADERS
+            });
+            
+            if (!response.ok) {
+                console.error(`GitHub API error: ${response.status} - ${response.statusText}`);
+                throw new Error(`GitHub API responded with status ${response.status}: ${response.statusText}`);
             }
-        });
+            
+            const data = await response.json() as GitHubRateLimitResponse;
+            console.log('Rate limit data received successfully');
+            
+            // Make sure the expected properties exist
+            if (!data.rate || !data.resources) {
+                console.error('Unexpected GitHub API response format:', JSON.stringify(data));
+                throw new Error('Unexpected GitHub API response format');
+            }
+            
+            return res.status(200).json({
+                remaining: data.rate.remaining,
+                reset: data.rate.reset,
+                limit: data.rate.limit,
+                resources: {
+                    core: data.resources.core,
+                    search: data.resources.search,
+                    graphql: data.resources.graphql
+                }
+            });
+        } catch (fetchError) {
+            console.error('Fetch error:', fetchError);
+            throw fetchError;
+        }
     } catch (error) {
         console.error('Rate limit check failed:', error);
         return res.status(500).json({ 

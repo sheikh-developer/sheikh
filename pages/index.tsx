@@ -9,6 +9,13 @@ interface RateLimit {
     reset: number;
 }
 
+interface PaginationInfo {
+    current_page: number;
+    total_pages: number;
+    total_followers: number;
+    limit: number;
+}
+
 interface Stats {
     followed: string[];
     processed: string[];
@@ -17,6 +24,7 @@ interface Stats {
     errors: number;
     total_processed: number;
     lastUpdate: string | null;
+    pagination?: PaginationInfo;
 }
 
 interface Notification {
@@ -59,6 +67,8 @@ const Dashboard: NextPage = (): ReactElement => {
     const [notifications, setNotifications] = useState<Notification[]>([]);
     const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
     const [showLogs, setShowLogs] = useState<boolean>(true);
+    const [currentPage, setCurrentPage] = useState<number>(1);
+    const [totalPages, setTotalPages] = useState<number>(1);
 
     const addNotification = useCallback((type: 'success' | 'error' | 'info', message: string) => {
         const id = Date.now().toString();
@@ -80,13 +90,27 @@ const Dashboard: NextPage = (): ReactElement => {
 
     const pollStats = useCallback(async (): Promise<void> => {
         try {
+            const limit = 5; // Match the default in the API
+            
+            // Add page and limit parameters to the follow API request
             const [statsRes, rateRes] = await Promise.all([
-                fetch('/api/follow'),
+                fetch(`/api/follow?page=${currentPage}&limit=${limit}`),
                 fetch('/api/rate-limit')
             ]);
 
-            if (!statsRes.ok || !rateRes.ok) {
-                throw new Error('API request failed');
+            // Add error details for debugging
+            if (!statsRes.ok) {
+                const errorText = await statsRes.text();
+                addNotification('error', `Follow API error: ${statsRes.status} - ${errorText.substring(0, 50)}`);
+                console.error('Follow API error:', statsRes.status, errorText);
+                throw new Error(`Follow API error: ${statsRes.status}`);
+            }
+            
+            if (!rateRes.ok) {
+                const errorText = await rateRes.text();
+                addNotification('error', `Rate limit API error: ${rateRes.status} - ${errorText.substring(0, 50)}`);
+                console.error('Rate limit API error:', rateRes.status, errorText);
+                throw new Error(`Rate limit API error: ${rateRes.status}`);
             }
 
             const [statsData, rateData] = await Promise.all([
@@ -94,7 +118,19 @@ const Dashboard: NextPage = (): ReactElement => {
                 rateRes.json()
             ]);
             
-            setStats((prev: Stats) => ({
+            // Update pagination state if available
+            if (statsData.pagination) {
+                setTotalPages(statsData.pagination.total_pages);
+                
+                addActivityLog({
+                    action: 'Pagination',
+                    timestamp: new Date().toISOString(),
+                    status: 'info',
+                    details: `Page ${statsData.pagination.current_page}/${statsData.pagination.total_pages}, ${statsData.pagination.total_followers} total followers`
+                });
+            }
+            
+            setStats(prev => ({
                 ...prev,
                 ...statsData,
                 rateLimit: rateData,
@@ -102,7 +138,7 @@ const Dashboard: NextPage = (): ReactElement => {
             }));
 
             // Add activity logs
-            if (statsData.followed.length > 0) {
+            if (statsData.followed && statsData.followed.length > 0) {
                 addActivityLog({
                     action: 'Follow Operation',
                     timestamp: new Date().toISOString(),
@@ -132,10 +168,12 @@ const Dashboard: NextPage = (): ReactElement => {
         } finally {
             setLoading(false);
         }
-    }, [addNotification, addActivityLog]);
+    }, [addNotification, addActivityLog, currentPage, setTotalPages]);
 
     useEffect(() => {
         if (autoStart) {
+            // Reset to page 1 when starting auto-refresh
+            setCurrentPage(1);
             pollStats();
         }
 
@@ -367,6 +405,39 @@ const Dashboard: NextPage = (): ReactElement => {
                                 </table>
                             </div>
                         </div>
+                    </div>
+                )}
+
+                {/* Pagination Controls */}
+                {!loading && stats.pagination && (
+                    <div className="mt-8 flex justify-center">
+                        <nav className="flex items-center bg-white p-2 rounded-md shadow">
+                            <button
+                                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                                disabled={currentPage === 1}
+                                className={`px-3 py-1 rounded-l-md ${
+                                    currentPage === 1 
+                                        ? 'bg-gray-200 text-gray-500 cursor-not-allowed' 
+                                        : 'bg-blue-500 text-white hover:bg-blue-600'
+                                } transition-colors`}
+                            >
+                                Previous
+                            </button>
+                            <span className="px-4 py-1 bg-gray-100 text-gray-700">
+                                Page {currentPage} of {totalPages}
+                            </span>
+                            <button
+                                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                                disabled={currentPage === totalPages || totalPages === 0}
+                                className={`px-3 py-1 rounded-r-md ${
+                                    currentPage === totalPages || totalPages === 0
+                                        ? 'bg-gray-200 text-gray-500 cursor-not-allowed' 
+                                        : 'bg-blue-500 text-white hover:bg-blue-600'
+                                } transition-colors`}
+                            >
+                                Next
+                            </button>
+                        </nav>
                     </div>
                 )}
             </div>
