@@ -1,5 +1,5 @@
-import { CONFIG, API_HEADERS } from '../config';
-import type { VercelRequest, VercelResponse } from '@vercel/node';
+import type { NextApiRequest, NextApiResponse } from 'next';
+import { CONFIG, API_HEADERS } from '../../config';
 
 interface GitHubUser {
     login: string;
@@ -38,6 +38,11 @@ interface FollowResponse {
     errors: number;
     consecutive_actions: number;
     timestamp: string;
+}
+
+interface ErrorResponse {
+    error: string;
+    details?: string;
 }
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -101,6 +106,10 @@ class RateLimiter {
 const rateLimiter = new RateLimiter();
 
 const getAllFollowers = async (): Promise<GitHubUser[]> => {
+    if (!CONFIG.GITHUB_TOKEN || !CONFIG.TARGET_USER) {
+        throw new Error('GitHub token or target user not configured');
+    }
+
     const allFollowers: GitHubUser[] = [];
     let page = 1;
     let consecutiveErrors = 0;
@@ -119,7 +128,7 @@ const getAllFollowers = async (): Promise<GitHubUser[]> => {
             }
             
             if (!res.ok) {
-                throw new Error(`GitHub API responded with status ${res.status}`);
+                throw new Error(`GitHub API responded with status ${res.status}: ${res.statusText}`);
             }
             
             const followers = await res.json() as GitHubUser[];
@@ -209,12 +218,24 @@ const isActiveUser = async (username: string): Promise<boolean> => {
     }
 };
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+export default async function handler(
+    req: NextApiRequest,
+    res: NextApiResponse<FollowResponse | ErrorResponse>
+) {
+    // Only allow GET requests
     if (req.method !== 'GET') {
-        return res.status(405).json({ error: 'Method not allowed' });
+        return res.status(405).json({ 
+            error: 'Method not allowed',
+            details: 'Only GET requests are allowed'
+        });
     }
 
     try {
+        // Check if GitHub token and target user are configured
+        if (!CONFIG.GITHUB_TOKEN || !CONFIG.TARGET_USER) {
+            throw new Error('GitHub token or target user not configured');
+        }
+
         const startTime = Date.now();
         const followers = await getAllFollowers();
         const activeUsers: string[] = [];
@@ -249,7 +270,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                         const retryAfter = parseInt(followRes.headers.get('retry-after') || '60');
                         await sleep(retryAfter * 1000);
                     } else if (!followRes.ok) {
-                        throw new Error(`Follow request failed with status ${followRes.status}`);
+                        throw new Error(`Follow request failed with status ${followRes.status}: ${followRes.statusText}`);
                     }
 
                     await sleep(getRandomDelay());
