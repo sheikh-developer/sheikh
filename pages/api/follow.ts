@@ -30,6 +30,12 @@ interface ActivityItem {
     updated_at?: string;
 }
 
+interface MonitoringData {
+    processing_time: number;
+    success_rate: number;
+    rate_limit_efficiency: number;
+}
+
 interface FollowResponse {
     followed: string[];
     processed: string[];
@@ -38,6 +44,7 @@ interface FollowResponse {
     errors: number;
     consecutive_actions: number;
     timestamp: string;
+    monitoring: MonitoringData;
 }
 
 interface ErrorResponse {
@@ -294,20 +301,15 @@ export default async function handler(
             rate_limit_hits: rateLimitHits,
             errors: errorCount,
             consecutive_actions: consecutiveActions,
-            timestamp: new Date().toISOString()
+            timestamp: new Date().toISOString(),
+            monitoring: {
+                processing_time: Date.now() - startTime,
+                success_rate: processedUsers.length > 0 ? (activeUsers.length / processedUsers.length) * 100 : 0,
+                rate_limit_efficiency: processedUsers.length > 0 ? 1 - (rateLimitHits / processedUsers.length) : 1
+            }
         };
 
-        // Add detailed monitoring
-        const monitoringData = {
-            processing_time: Date.now() - startTime,
-            success_rate: (activeUsers.length / processedUsers.length) * 100,
-            rate_limit_efficiency: 1 - (rateLimitHits / processedUsers.length)
-        };
-
-        return res.status(200).json({
-            ...response,
-            monitoring: monitoringData
-        });
+        return res.status(200).json(response);
     } catch (error) {
         await rateLimiter.handleError('follow', error as Error);
         console.error('Follow handler error:', error);
